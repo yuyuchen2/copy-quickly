@@ -1,179 +1,147 @@
 // ==UserScript==
 // @name         Copy Quickly
 // @namespace    http://tampermonkey.net/
-// @version      1.1
-// @description  快速复制粘贴工具：点击按钮粘贴剪贴板内容，或复制选中文本
+// @version      1.2
+// @description  快速复制粘贴工具：点击按钮粘贴剪贴板内容，或复制选中文本 - 优化Android版本
 // @author       yuyuchen2
 // @match        *://*/*
 // @grant        GM_setClipboard
 // @grant        GM_getClipboard
-// @grant        GM.xmlHttpRequest
+// @grant        unsafeWindow
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACw=
-// @run-at       document-start
+// @run-at       document-end
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    // 样式配置
+    // 用于全局跟踪脚本状态
+    if (window.copyQuicklyLoaded) {
+        console.log('Copy Quickly 已加载，跳过重复加载');
+        return;
+    }
+    window.copyQuicklyLoaded = true;
+
+    console.log('✅ Copy Quickly v1.2 脚本开始加载');
+
+    // 样式配置 - 针对移动设备优化
     const BUTTON_STYLES = {
         paste: {
             backgroundColor: '#4CAF50',
             color: 'white',
-            padding: '6px 12px',
-            fontSize: '12px',
+            padding: '8px 14px',
+            fontSize: '14px',
             border: 'none',
             borderRadius: '4px',
             cursor: 'pointer',
-            zIndex: '10000',
-            position: 'absolute',
+            zIndex: '999999',
+            position: 'fixed',
             whiteSpace: 'nowrap',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
             fontWeight: 'bold',
-            transition: 'all 0.2s ease'
+            transition: 'all 0.2s ease',
+            fontFamily: 'Arial, sans-serif'
         },
         copy: {
             backgroundColor: '#2196F3',
             color: 'white',
-            padding: '8px 16px',
-            fontSize: '13px',
+            padding: '8px 14px',
+            fontSize: '14px',
             border: 'none',
             borderRadius: '4px',
             cursor: 'pointer',
-            zIndex: '10001',
+            zIndex: '999999',
             position: 'fixed',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
             fontWeight: 'bold',
-            transition: 'all 0.2s ease'
+            transition: 'all 0.2s ease',
+            fontFamily: 'Arial, sans-serif'
         }
     };
 
     // 应用样式到元素
     function applyStyles(element, styles) {
-        Object.assign(element.style, styles);
-        // 添加悬停效果
-        element.addEventListener('mouseenter', function() {
-            this.style.transform = 'scale(1.05)';
-            this.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
-        });
-        element.addEventListener('mouseleave', function() {
-            this.style.transform = 'scale(1)';
-            this.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
-        });
-    }
-
-    // 从剪贴板读取文本 - 支持多种方法
-    async function getClipboardText() {
         try {
-            // 方法1: 使用 Tampermonkey 的 GM_getClipboard (最可靠，特别是在移动设备上)
-            if (typeof GM_getClipboard !== 'undefined') {
-                try {
-                    const text = GM_getClipboard('text');
-                    if (text !== undefined && text !== null && text !== '') {
-                        console.log('✓ 使用 GM_getClipboard 获取剪贴板成功');
-                        return text;
-                    }
-                } catch (e) {
-                    console.warn('GM_getClipboard 失败:', e);
-                }
-            }
-
-            // 方法2: 使用浏览器原生 navigator.clipboard API
-            if (navigator.clipboard && navigator.clipboard.readText) {
-                try {
-                    const text = await navigator.clipboard.readText();
-                    if (text) {
-                        console.log('✓ 使用 navigator.clipboard 获取剪贴板成功');
-                        return text;
-                    }
-                } catch (e) {
-                    console.warn('navigator.clipboard 失败:', e);
-                }
-            }
-
-            // 方法3: 使用过时的 document.execCommand('paste')
-            try {
-                const textArea = document.createElement('textarea');
-                textArea.style.position = 'fixed';
-                textArea.style.left = '-9999px';
-                textArea.style.top = '-9999px';
-                textArea.style.opacity = '0';
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                
-                if (document.execCommand('paste')) {
-                    const text = textArea.value;
-                    textArea.remove();
-                    if (text) {
-                        console.log('✓ 使用 document.execCommand 获取剪贴板成功');
-                        return text;
-                    }
-                }
-                textArea.remove();
-            } catch (e) {
-                console.warn('document.execCommand 失败:', e);
-            }
-
-            throw new Error('所有剪贴板读取方法都失败了');
-        } catch (err) {
-            console.error('获取剪贴板内容失败:', err);
-            throw err;
+            Object.keys(styles).forEach(key => {
+                element.style[key] = styles[key];
+            });
+        } catch (e) {
+            console.error('应用样式失败:', e);
         }
     }
 
-    // 写入剪贴板 - 支持多种方法
-    async function copyToClipboard(text) {
-        try {
-            // 方法1: 使用 Tampermonkey 的 GM_setClipboard (最可靠，特别是在移动设备上)
-            if (typeof GM_setClipboard !== 'undefined') {
-                try {
-                    GM_setClipboard(text, 'text');
-                    console.log('✓ 使用 GM_setClipboard 复制到剪贴板成功');
-                    return true;
-                } catch (e) {
-                    console.warn('GM_setClipboard 失败:', e);
-                }
-            }
-
-            // 方法2: 使用浏览器原生 navigator.clipboard API
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                try {
-                    await navigator.clipboard.writeText(text);
-                    console.log('✓ 使用 navigator.clipboard 复制到剪贴板成功');
-                    return true;
-                } catch (e) {
-                    console.warn('navigator.clipboard 失败:', e);
-                }
-            }
-
-            // 方法3: 使用过时的 document.execCommand('copy')
+    // 从剪贴板读取 - 针对暴力猴优化
+    function getClipboardText() {
+        return new Promise((resolve, reject) => {
             try {
-                const textArea = document.createElement('textarea');
-                textArea.value = text;
-                textArea.style.position = 'fixed';
-                textArea.style.left = '-9999px';
-                textArea.style.top = '-9999px';
-                textArea.style.opacity = '0';
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                
-                if (document.execCommand('copy')) {
-                    textArea.remove();
-                    console.log('✓ 使用 document.execCommand 复制到剪贴板成功');
-                    return true;
+                // 暴力猴/油猴的标准方法
+                if (typeof GM_getClipboard !== 'undefined') {
+                    try {
+                        const text = GM_getClipboard('text');
+                        if (text) {
+                            console.log('✓ GM_getClipboard 成功获取');
+                            resolve(text);
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('GM_getClipboard 错误:', e.message);
+                    }
                 }
-                textArea.remove();
-            } catch (e) {
-                console.warn('document.execCommand 失败:', e);
-            }
 
-            throw new Error('所有剪贴板写入方法都失败了');
-        } catch (err) {
-            console.error('写入剪贴板失败:', err);
-            throw err;
-        }
+                // 备选方案: 原生 Clipboard API
+                if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+                    navigator.clipboard.readText().then(text => {
+                        console.log('✓ Clipboard API 成功获取');
+                        resolve(text);
+                    }).catch(e => {
+                        console.warn('Clipboard API 失败:', e.message);
+                        reject(new Error('剪贴板读取失败'));
+                    });
+                    return;
+                }
+
+                reject(new Error('暴力猴无剪贴板权限'));
+            } catch (e) {
+                console.error('获取剪贴板异常:', e);
+                reject(e);
+            }
+        });
+    }
+
+    // 写入剪贴板 - 针对暴力猴优化
+    function copyToClipboard(text) {
+        return new Promise((resolve, reject) => {
+            try {
+                // 暴力猴/油猴的标准方法
+                if (typeof GM_setClipboard !== 'undefined') {
+                    try {
+                        GM_setClipboard(text, 'text');
+                        console.log('✓ GM_setClipboard 成功复制');
+                        resolve(true);
+                        return;
+                    } catch (e) {
+                        console.warn('GM_setClipboard 错误:', e.message);
+                    }
+                }
+
+                // 备选方案: 原生 Clipboard API
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    navigator.clipboard.writeText(text).then(() => {
+                        console.log('✓ Clipboard API 成功复制');
+                        resolve(true);
+                    }).catch(e => {
+                        console.warn('Clipboard API 失败:', e.message);
+                        reject(new Error('复制失败'));
+                    });
+                    return;
+                }
+
+                reject(new Error('暴力猴无剪贴板权限'));
+            } catch (e) {
+                console.error('复制异常:', e);
+                reject(e);
+            }
+        });
     }
 
     // 创建粘贴按钮
@@ -181,25 +149,35 @@
         const button = document.createElement('button');
         button.textContent = '📋 粘贴';
         button.className = 'copy-quickly-paste-btn';
+        button.type = 'button';
         applyStyles(button, BUTTON_STYLES.paste);
 
-        button.addEventListener('click', async function(e) {
+        button.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            try {
-                const clipboardText = await getClipboardText();
-                if (!clipboardText) {
-                    showFeedback(button, '✗ 剪贴板为空');
+            
+            // 禁用按钮，显示加载状态
+            button.disabled = true;
+            button.textContent = '加载中...';
+
+            getClipboardText().then(clipboardText => {
+                if (!clipboardText || clipboardText.trim() === '') {
+                    showFeedback(button, '✗ 剪贴板为空', '📋 粘贴');
                     return;
                 }
+                
+                // 填充输入框
                 element.value = clipboardText;
                 element.dispatchEvent(new Event('input', { bubbles: true }));
                 element.dispatchEvent(new Event('change', { bubbles: true }));
-                showFeedback(button, '✓ 粘贴成功');
-            } catch (err) {
-                console.error('粘贴失败:', err);
-                showFeedback(button, '✗ 粘贴失败');
-            }
+                element.focus();
+                
+                showFeedback(button, '✓ 粘贴成功', '📋 粘贴');
+                console.log('✓ 粘贴完成');
+            }).catch(err => {
+                console.error('粘贴错误:', err);
+                showFeedback(button, '✗ 粘贴失败', '📋 粘贴');
+            });
         });
 
         return button;
@@ -210,31 +188,37 @@
         const button = document.createElement('button');
         button.textContent = '📄 复制';
         button.className = 'copy-quickly-copy-btn';
+        button.type = 'button';
         applyStyles(button, BUTTON_STYLES.copy);
 
-        button.addEventListener('click', async function(e) {
+        button.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            try {
-                const selectedText = window.getSelection().toString();
-                if (selectedText) {
-                    await copyToClipboard(selectedText);
-                    showFeedback(button, '✓ 已复制');
-                } else {
-                    showFeedback(button, '✗ 没有选中内容');
-                }
-            } catch (err) {
-                console.error('复制失败:', err);
-                showFeedback(button, '✗ 复制失败');
+
+            button.disabled = true;
+            button.textContent = '复制中...';
+
+            const selectedText = window.getSelection().toString();
+            
+            if (!selectedText || selectedText.trim() === '') {
+                showFeedback(button, '✗ 未选中', '📄 复制');
+                return;
             }
+
+            copyToClipboard(selectedText).then(() => {
+                showFeedback(button, '✓ 已复制', '📄 复制');
+                console.log('✓ 复制完成');
+            }).catch(err => {
+                console.error('复制错误:', err);
+                showFeedback(button, '✗ 复制失败', '📄 复制');
+            });
         });
 
         return button;
     }
 
     // 显示操作反馈
-    function showFeedback(button, message) {
-        const originalText = button.textContent;
+    function showFeedback(button, message, originalText) {
         button.textContent = message;
         button.disabled = true;
 
@@ -244,133 +228,149 @@
         }, 2000);
     }
 
-    // 定位按钮到输入框/文本框旁边
-    function positionPasteButton(button, element) {
-        const rect = element.getBoundingClientRect();
-        button.style.left = (rect.right + 8) + 'px';
-        button.style.top = (rect.top + rect.height / 2 - 15) + 'px';
-
-        // 确保按钮不超出视图
-        setTimeout(() => {
-            const buttonRect = button.getBoundingClientRect();
-            if (buttonRect.right > window.innerWidth) {
-                button.style.left = (rect.left - button.offsetWidth - 8) + 'px';
-            }
-            if (buttonRect.bottom > window.innerHeight) {
-                button.style.top = (rect.top - button.offsetHeight - 8) + 'px';
-            }
-        }, 0);
-    }
-
-    // 定位复制按钮到鼠标位置附近
-    function positionCopyButton(button, x, y) {
-        button.style.left = (x + 10) + 'px';
-        button.style.top = (y + 10) + 'px';
-
-        setTimeout(() => {
-            const rect = button.getBoundingClientRect();
-            if (rect.right > window.innerWidth) {
-                button.style.left = (x - button.offsetWidth - 10) + 'px';
-            }
-            if (rect.bottom > window.innerHeight) {
-                button.style.top = (y - button.offsetHeight - 10) + 'px';
-            }
-        }, 0);
-    }
-
-    // 处理输入框/文本框的聚焦
+    // 处理输入框/文本框
     function handleInputFocus(e) {
         const element = e.target;
-        if (!element.classList.contains('copy-quickly-monitored')) {
-            element.classList.add('copy-quickly-monitored');
-
-            let pasteButton = null;
-
-            // 输入时显示粘贴按钮
-            element.addEventListener('input', function() {
-                if (!pasteButton || !pasteButton.parentNode) {
-                    pasteButton = createPasteButton(element);
-                    document.body.appendChild(pasteButton);
-                }
-                positionPasteButton(pasteButton, element);
-            });
-
-            // 失焦时隐藏粘贴按钮
-            element.addEventListener('blur', function() {
-                if (pasteButton && pasteButton.parentNode) {
-                    pasteButton.remove();
-                    pasteButton = null;
-                }
-            });
-
-            // 窗口滚动时更新按钮位置
-            window.addEventListener('scroll', function() {
-                if (pasteButton && pasteButton.parentNode) {
-                    positionPasteButton(pasteButton, element);
-                }
-            });
+        
+        // 检查是否是有效的输入元素
+        if (element.tagName !== 'INPUT' && element.tagName !== 'TEXTAREA') {
+            return;
         }
+
+        // 防止重复监听
+        if (element.classList.contains('copy-quickly-monitored')) {
+            return;
+        }
+
+        element.classList.add('copy-quickly-monitored');
+
+        let pasteButton = null;
+
+        // 当用户开始输入时显示粘贴按钮
+        const inputHandler = function() {
+            if (!pasteButton || !document.body.contains(pasteButton)) {
+                pasteButton = createPasteButton(element);
+                document.body.appendChild(pasteButton);
+            }
+
+            // 定位按钮到输入框下方
+            const rect = element.getBoundingClientRect();
+            pasteButton.style.left = Math.max(10, rect.left) + 'px';
+            pasteButton.style.top = (rect.bottom + 10) + 'px';
+        };
+
+        // 失焦时隐藏按钮
+        const blurHandler = function() {
+            if (pasteButton && document.body.contains(pasteButton)) {
+                pasteButton.remove();
+                pasteButton = null;
+            }
+        };
+
+        element.addEventListener('input', inputHandler);
+        element.addEventListener('blur', blurHandler);
     }
 
     // 处理文本选择
-    document.addEventListener('mouseup', function() {
+    function handleTextSelection() {
         const selectedText = window.getSelection().toString();
         
         // 移除旧的复制按钮
-        const oldButton = document.querySelector('.copy-quickly-copy-btn');
-        if (oldButton) {
-            oldButton.remove();
-        }
+        const oldButtons = document.querySelectorAll('.copy-quickly-copy-btn');
+        oldButtons.forEach(btn => {
+            if (document.body.contains(btn)) {
+                btn.remove();
+            }
+        });
 
         if (selectedText.length > 0) {
-            const selection = window.getSelection();
-            const range = selection.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
-
             const copyButton = createCopyButton();
             document.body.appendChild(copyButton);
-            positionCopyButton(copyButton, rect.right, rect.top);
+
+            // 定位到屏幕中心
+            copyButton.style.left = (window.innerWidth / 2 - 40) + 'px';
+            copyButton.style.top = '50px';
 
             // 点击其他地方时移除按钮
-            document.addEventListener('mousedown', function removeButton(e) {
-                if (!e.target.classList.contains('copy-quickly-copy-btn')) {
+            const removeHandler = function(e) {
+                if (!e.target.classList.contains('copy-quickly-copy-btn') && 
+                    document.body.contains(copyButton)) {
                     copyButton.remove();
-                    document.removeEventListener('mousedown', removeButton);
+                    document.removeEventListener('click', removeHandler);
                 }
-            });
+            };
+
+            setTimeout(() => {
+                document.addEventListener('click', removeHandler);
+            }, 100);
         }
-    });
+    }
 
-    // 监听输入框和文本框
-    document.addEventListener('focusin', handleInputFocus, true);
+    // 主初始化函数
+    function init() {
+        console.log('Copy Quickly 初始化中...');
 
-    // 处理动态加载的内容
-    const observer = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-            mutation.addedNodes.forEach(function(node) {
-                if (node.nodeType === 1) { // Element node
-                    if (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') {
-                        node.addEventListener('focus', handleInputFocus);
-                    } else {
-                        const inputs = node.querySelectorAll('input, textarea');
-                        inputs.forEach(input => input.addEventListener('focus', handleInputFocus));
-                    }
-                }
+        try {
+            // 监听焦点事件以处理输入框
+            document.addEventListener('focusin', handleInputFocus, true);
+            console.log('✓ 已监听输入框焦点事件');
+
+            // 监听文本选择
+            document.addEventListener('mouseup', handleTextSelection);
+            document.addEventListener('touchend', handleTextSelection);
+            console.log('✓ 已监听文本选择事件');
+
+            // 处理动态加载的内容
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1) {
+                            if (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') {
+                                if (!node.classList.contains('copy-quickly-monitored')) {
+                                    const event = new Event('focusin', { bubbles: true });
+                                    node.dispatchEvent(event);
+                                }
+                            } else if (node.querySelectorAll) {
+                                const inputs = node.querySelectorAll('input, textarea');
+                                inputs.forEach(input => {
+                                    if (!input.classList.contains('copy-quickly-monitored')) {
+                                        const event = new Event('focusin', { bubbles: true });
+                                        input.dispatchEvent(event);
+                                    }
+                                });
+                            }
+                        }
+                    });
+                });
             });
-        });
-    });
 
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            console.log('✓ 已监听动态内容');
 
-    // 初始化已存在的输入框
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('input, textarea').forEach(element => {
-            element.addEventListener('focus', handleInputFocus);
-        });
-    });
+            // 初始化已有的输入框
+            setTimeout(() => {
+                document.querySelectorAll('input, textarea').forEach(element => {
+                    if (!element.classList.contains('copy-quickly-monitored')) {
+                        const event = new Event('focusin', { bubbles: true });
+                        element.dispatchEvent(event);
+                    }
+                });
+                console.log('✓ 已初始化现有输入框');
+            }, 500);
 
-    console.log('✅ Copy Quickly v1.1 脚本已加载 - 支持 Android Firefox');
+            console.log('✅ Copy Quickly v1.2 加载成功！');
+        } catch (e) {
+            console.error('Copy Quickly 初始化失败:', e);
+        }
+    }
+
+    // 等待DOM加载完成后初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
