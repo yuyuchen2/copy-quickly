@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Quickly
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  快速复制粘贴工具：点击按钮粘贴剪贴板内容，或复制选中文本
 // @author       yuyuchen2
 // @match        *://*/*
@@ -62,6 +62,120 @@
         });
     }
 
+    // 从剪贴板读取文本 - 支持多种方法
+    async function getClipboardText() {
+        try {
+            // 方法1: 使用 Tampermonkey 的 GM_getClipboard (最可靠，特别是在移动设备上)
+            if (typeof GM_getClipboard !== 'undefined') {
+                try {
+                    const text = GM_getClipboard('text');
+                    if (text !== undefined && text !== null && text !== '') {
+                        console.log('✓ 使用 GM_getClipboard 获取剪贴板成功');
+                        return text;
+                    }
+                } catch (e) {
+                    console.warn('GM_getClipboard 失败:', e);
+                }
+            }
+
+            // 方法2: 使用浏览器原生 navigator.clipboard API
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if (text) {
+                        console.log('✓ 使用 navigator.clipboard 获取剪贴板成功');
+                        return text;
+                    }
+                } catch (e) {
+                    console.warn('navigator.clipboard 失败:', e);
+                }
+            }
+
+            // 方法3: 使用过时的 document.execCommand('paste')
+            try {
+                const textArea = document.createElement('textarea');
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-9999px';
+                textArea.style.top = '-9999px';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                if (document.execCommand('paste')) {
+                    const text = textArea.value;
+                    textArea.remove();
+                    if (text) {
+                        console.log('✓ 使用 document.execCommand 获取剪贴板成功');
+                        return text;
+                    }
+                }
+                textArea.remove();
+            } catch (e) {
+                console.warn('document.execCommand 失败:', e);
+            }
+
+            throw new Error('所有剪贴板读取方法都失败了');
+        } catch (err) {
+            console.error('获取剪贴板内容失败:', err);
+            throw err;
+        }
+    }
+
+    // 写入剪贴板 - 支持多种方法
+    async function copyToClipboard(text) {
+        try {
+            // 方法1: 使用 Tampermonkey 的 GM_setClipboard (最可靠，特别是在移动设备上)
+            if (typeof GM_setClipboard !== 'undefined') {
+                try {
+                    GM_setClipboard(text, 'text');
+                    console.log('✓ 使用 GM_setClipboard 复制到剪贴板成功');
+                    return true;
+                } catch (e) {
+                    console.warn('GM_setClipboard 失败:', e);
+                }
+            }
+
+            // 方法2: 使用浏览器原生 navigator.clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    console.log('✓ 使用 navigator.clipboard 复制到剪贴板成功');
+                    return true;
+                } catch (e) {
+                    console.warn('navigator.clipboard 失败:', e);
+                }
+            }
+
+            // 方法3: 使用过时的 document.execCommand('copy')
+            try {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-9999px';
+                textArea.style.top = '-9999px';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                if (document.execCommand('copy')) {
+                    textArea.remove();
+                    console.log('✓ 使用 document.execCommand 复制到剪贴板成功');
+                    return true;
+                }
+                textArea.remove();
+            } catch (e) {
+                console.warn('document.execCommand 失败:', e);
+            }
+
+            throw new Error('所有剪贴板写入方法都失败了');
+        } catch (err) {
+            console.error('写入剪贴板失败:', err);
+            throw err;
+        }
+    }
+
     // 创建粘贴按钮
     function createPasteButton(element) {
         const button = document.createElement('button');
@@ -73,7 +187,11 @@
             e.preventDefault();
             e.stopPropagation();
             try {
-                const clipboardText = await navigator.clipboard.readText();
+                const clipboardText = await getClipboardText();
+                if (!clipboardText) {
+                    showFeedback(button, '✗ 剪贴板为空');
+                    return;
+                }
                 element.value = clipboardText;
                 element.dispatchEvent(new Event('input', { bubbles: true }));
                 element.dispatchEvent(new Event('change', { bubbles: true }));
@@ -100,8 +218,10 @@
             try {
                 const selectedText = window.getSelection().toString();
                 if (selectedText) {
-                    await navigator.clipboard.writeText(selectedText);
+                    await copyToClipboard(selectedText);
                     showFeedback(button, '✓ 已复制');
+                } else {
+                    showFeedback(button, '✗ 没有选中内容');
                 }
             } catch (err) {
                 console.error('复制失败:', err);
@@ -252,5 +372,5 @@
         });
     });
 
-    console.log('✅ Copy Quickly 脚本已加载');
+    console.log('✅ Copy Quickly v1.1 脚本已加载 - 支持 Android Firefox');
 })();
